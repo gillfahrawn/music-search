@@ -1,3 +1,5 @@
+from cgi import print_directory
+import pprint
 from django.shortcuts import render
 from django.http.response import JsonResponse
 from rest_framework.parsers import JSONParser 
@@ -7,6 +9,7 @@ from mus_search.models import Music_Entry
 from mus_search.serializers import EntrySerializer
 from rest_framework.decorators import api_view
 
+from django.http import HttpResponse
 
 def test_vue(request):
     return render(request, 'vue_app/index.html')
@@ -15,7 +18,7 @@ def test_vue(request):
 # 'safe=False' for objects serialization
 # GET list of tutorials, POST a new tutorial, DELETE all tutorials
 @api_view(['GET', 'POST', 'DELETE'])
-def tutorial_list(request):
+def entry_list(request):
     if request.method == 'GET':
         entries = Music_Entry.objects.all()
         
@@ -28,7 +31,14 @@ def tutorial_list(request):
         
     elif request.method == 'POST':
         entry_data = JSONParser().parse(request)
-        entry_serializer = EntrySerializer(data=entry_data)
+
+        store_data = {}
+        for key, val in list(entry_data.items()):
+            if type(val) is dict:
+                if 'results' in val:
+                   store_data = val['results'][0]
+
+        entry_serializer = EntrySerializer(data=store_data)
         if entry_serializer.is_valid():
             entry_serializer.save()
             return JsonResponse(entry_serializer.data, status=status.HTTP_201_CREATED) 
@@ -39,9 +49,12 @@ def tutorial_list(request):
         return JsonResponse({'message': '{} Music Entries were deleted successfully!'.format(count[0])}, status=status.HTTP_204_NO_CONTENT)
 
  
+
+      
+
  
 @api_view(['GET', 'PUT', 'DELETE'])
-def tutorial_detail(request, pk):
+def entry_detail(request, pk):
     # find tutorial by pk (id)
     try: 
         entry = Music_Entry.objects.get(pk=pk) 
@@ -67,7 +80,7 @@ def tutorial_detail(request, pk):
     
         
 @api_view(['GET'])
-def tutorial_list_published(request):
+def entry_list_published(request):
     entries = Music_Entry.objects.filter(published=True)
 
     if request.method == 'GET': 
