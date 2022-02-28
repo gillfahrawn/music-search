@@ -1,0 +1,421 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+  <head>
+    <title> Music Search</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.19.0/axios.min.js"></script>
+    </title>
+  </head>  
+  <style>
+    .genre{
+    border:solid 2px;
+    border-radius: 3px;
+    margin:5px;
+    white-space: nowrap;
+    background-color:#ccc;
+    padding:2px;
+    }
+    /*img {
+    height: 200px;
+    }*/ 
+ </style>
+  <body>
+    <div id='app'>
+        <nav class="navbar navbar-default">
+            <div class="container">
+            <div class="navbar-header">
+                <h3>Music Search.</h3>
+            </div>
+            </div>
+        </nav>
+        <div class = "container">
+                <div class = "row searchbar" >
+                <div class = "col-lg-12 col-md-12 col-sm-12">
+                    <h4>Type the name of your favorite musician, and press enter : </h4>
+                    <input type="text" v-on:keyup.13="pressEnter($event.target.value)"> <!-- SEARCH BAR -->
+                </div>
+                </div>
+
+                <div class = "col-lg-12 col-md-12 col-sm-12">
+                <div ><b>Search Result (Total {-resultCount-} Found.)</b></div>
+                <div v-show="resultCount>0">
+                    <button v-on:click="clickAll" v-bind:class="[all ? 'btn btn-success' : 'btn btn-default']" style="margin:2px;">ALL</button>
+                    
+                    <button v-for="(genre, i) in genres" :key="i" v-bind:key=genreKey v-on:click="clickGenreButton(genre)"  v-bind:class="[genreColorUpdate(genre) ? 'btn btn-primary' : 'btn btn-default']"  style="margin:2px;">{-genre-}</button>
+                </div>
+                <h4>
+                    List of results
+                </h4>
+
+                <div class="dropdown">
+                    <button class="btn btn-primary dropdown-toggle" type="button" data-toggle="dropdown">Sort list of results by: 
+                    <span class="caret"></span></button>
+                    <ul v-bind:key=sortKey class="dropdown-menu">
+                    <li v-on:click="sortReset" v-bind:class="sortOptions[0] ? 'active' : ''"><a href="#">Reset to original</a></li>
+                    <li v-on:click="sortByCollection" v-bind:class="sortOptions[1] ? 'active' : ''"><a href="#">Collection Name</a></li>
+                    <li v-on:click="sortByPrice" v-bind:class="sortOptions[2] ? 'active' : ''"><a href="#">Price</a></li>
+                    </ul>
+                </div>
+            
+                <div v-show="loading">
+                    <img style='width: 25%; display: inline; ' src="{% static 'img/loading.gif' %}">
+                </div>
+            </div>
+            <div v-show="resultCount>0" >
+                <div v-for="(artist, j) in artistDescription" :key="j" class = "col-lg-6 col-md-6 col-sm-6" style='margin-bottom: 50px; display: inline; height: 250px' >
+                <div class="col-sm-4" style='max-width:200px;margin-right: 30px'>
+                    <img style='width: 120%; display: inline; ' :src="artist[5]">
+                </div>
+
+                <div class="col-sm-6" style='max-height: 250px;'>
+                    <ul class="nav nav-tabs">
+                    <li class="active"><a :id="artist[6]" data-toggle="tab" v-on:click="description(artist[6])">Description</a></li>
+                    <li><a :id="artist[6]" data-toggle="tab" v-on:click="track(artist[6])">Track</a></li>
+                    </ul>
+                    <div v-bind:key=renderKey class="tab-content">
+                    <div v-show="tabStates[artist[6]]==0">
+                        <div><b>Artist: {-artist[0]-}</b></div>
+                        <div><b>Album: {-artist[1]-}</b></div>
+                        <div><b>Price: {-artist[2]-}</b></div>
+                        <div><b>Kind: {-artist[3]-}</b></div>
+                        <div><b>Preview: <a :href=artist[4] target="_blank">{-artist[10]-}</a></b></div>
+                    </div>
+                    <div v-show="tabStates[artist[6]]==1">
+                        <div><b>Track ID: {-artist[7]-}</b></div>
+                        <div><b>Country: {-artist[8]-}</b></div>
+                    </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        var resultView = new Vue({
+        el: '#app',
+        delimiters: ['{-', '-}'],
+        data: {
+          itunesDefaultURL: 'https://itunes.apple.com/search?attribute=allArtistTerm&entity=movie&entity=album&entity=allArtist&entity=podcast&entity=musicVideo&entity=mix&entity=audiobook&entity=tvSeason&entity=allTrack&country=US&origin=*&term=',
+          search:0, 
+          info:null,
+          resultCount:0,
+          allResultCount:0,
+          id:-1,
+          artistDescription:[],
+          artistAll:[],
+          tabStates:[],// 0=tab1 1=tab2
+          genres:[],
+          genreClick:[],
+          genreKey:0,
+          renderKey:0,
+          all:true,
+          sortOptions:[true, false, false],
+          sortKey:0,
+          originalSortCopy:[],
+          loading:false,
+        },
+        methods: {
+          reset() {
+            this.id = 0
+            this.artistDescription = []
+            this.artistAll = []
+            this.tabStates = []
+            this.genres = []
+            this.genreClick = []
+            this.originalSortCopy = []
+          },
+          updateSort() {
+            if (this.sortOptions[0]) {
+              //update sort
+              this.artistDescription = []
+      
+              if (this.all) {
+                this.artistDescription = [].concat(this.artistAll)
+              }
+              else {
+                this.artistDescription = this.artistAll.filter(artist => this.genreClick[this.genres.indexOf(artist[9])] )
+              }
+            }
+            else if (this.sortOptions[1]) {
+              // if COLLECTION sort
+              // a and b are artists and index [1] is collection name. 
+              // This sorts alphabetically
+              this.artistDescription.sort( function(a,b){
+                if (a[1] < b[1]) return -1;
+                if (a[1] > b[1]) return 1;
+                return 0;
+              } )
+            }
+            else if (this.sortOptions[2]) {
+              // if PRICE sort
+              // index [2] is price. sort in acending order
+              this.artistDescription.sort( function(a,b){
+                if (a[2] < b[2]) return -1;
+                if (a[2] > b[2]) return 1;
+                return 0;
+              } )
+            }
+            
+          },
+          // these sort functions are called if they ON:CLICK
+          sortReset() {// 0 is reset, 1 is collection, 2 is price
+            this.sortOptions[0] = true
+            this.sortOptions[1] = false
+            this.sortOptions[2] = false
+      
+            this.updateSort()
+            
+            this.sortKey++
+          },
+          sortByCollection() {// 0 is reset, 1 is collection, 2 is price
+            this.sortOptions[0] = false
+            this.sortOptions[1] = true
+            this.sortOptions[2] = false
+            
+            this.updateSort()
+      
+            this.sortKey++
+          },
+          sortByPrice() {// 0 is reset, 1 is collection, 2 is price
+            this.sortOptions[0] = false
+            this.sortOptions[1] = false
+            this.sortOptions[2] = true
+            
+            this.updateSort()
+      
+            this.sortKey++
+          },
+      
+          //this.artistAll.push([artistName,collectionName,price,kind,preview,image,index,trackId,country,currGenre])
+          pressEnter(value) {
+            this.reset()
+            // '&country=US' + '&origin=*' from itunes api documentation
+            this.search = this.itunesDefaultURL + value.toLowerCase()
+            //toLowerCase() workaround for Network error thrown - net::ERR_FAILED 200 (CORS) 
+
+            // URL can't have spaces, so add '+'
+            this.search = this.search.split(' ').join('+')
+            //console.log(this.search)
+            this.loading = true
+            axios.get(this.search).then(response => { 
+              this.loading = false
+              this.info = response
+              this.allResultCount = this.info.data.resultCount
+              this.resultCount = this.allResultCount
+      
+              if (this.resultCount == 0) {
+                alert("No Artist Found")
+              }
+
+              for (let i = 0; i < this.resultCount; i++) {
+                artistName = 0 // [0] index in array
+                collectionName = 0 // [1] index in array
+                price = 0 // [2] index in array
+                kind = 0 // [3] index in array
+                preview = 0 // [4] index in array
+                image = 0 // [5] index in array
+                index = 0 // [6] index in array
+                trackId = 0 // [7] index in array
+                country = 0 // [8] index in array
+                currGenre = 0 // [9] index in array
+                urlMessage = "Link" // [10] index in array
+      
+                if (response.data.results[i].hasOwnProperty("artistName")) {
+                  artistName = response.data.results[i].artistName
+                }
+                else {
+                  artistName = "No Information Provided"
+                }
+                if (artistName == '') {
+                  artistName = "No Information Provided"
+                }
+      
+                if (response.data.results[i].hasOwnProperty("collectionName")) {
+                  collectionName = response.data.results[i].collectionName
+                }
+                else {
+                  collectionName = "No Information Provided"
+                }
+                if (collectionName == '') {
+                  collectionName = "No Information Provided"
+                }
+      
+                if (response.data.results[i].hasOwnProperty("collectionPrice")) {
+                  price = response.data.results[i].collectionPrice
+                }
+                else {
+                  price = 0
+                }
+                if (price == '') {
+                  price = 0
+                }
+      
+                if (response.data.results[i].hasOwnProperty("kind")) {
+                  kind = response.data.results[i].kind
+                }
+                else {
+                  kind = "No Information Provided"
+                }
+                if (kind == '') {
+                  kind = "No Information Provided"
+                }
+      
+                if (response.data.results[i].hasOwnProperty("previewUrl")) {
+                  preview = response.data.results[i].previewUrl
+                }
+                else {
+                  preview = "No Information Provided"
+                  urlMessage = preview
+                }
+                if (preview == '') {
+                  preview = "No Information Provided"
+                  urlMessage = preview
+                }
+      
+                if (response.data.results[i].hasOwnProperty("artworkUrl100")) {
+                  image = response.data.results[i].artworkUrl100
+                }
+                else {
+                  image = "No Information Provided"
+                }
+                if (image == '') {
+                  image = this.artist1
+                }
+                
+                // every artist block needs an ID so we can swap tabs
+                // default tab is "Description" which is 0
+                index = this.getID() // [6] in array
+                this.tabStates[index] = 0
+      
+                trackId = response.data.results[i].trackId // [7] in array
+      
+                if (response.data.results[i].hasOwnProperty("country")) {
+                  country = response.data.results[i].country
+                }
+                else {
+                  country = "No Information Provided"
+                }
+                if (country == '') {
+                  country = "No Information Provided"
+                }// [8] in array
+      
+                if (response.data.results[i].hasOwnProperty("primaryGenreName")) {
+                  currGenre = response.data.results[i].primaryGenreName
+                  if (currGenre != '') {
+                    //checks for existence and duplicates
+                    if (this.genres.indexOf(currGenre) == -1) {
+                      this.genres.push(currGenre)
+                      //this genre is not clicked
+                      this.genreClick.push(false)
+                    }
+                  }
+                }// [9] in array
+                
+                this.artistAll.push([artistName,collectionName,price,kind,preview,image,index,trackId,country,currGenre,urlMessage])
+                this.artistDescription = [].concat(this.artistAll)
+      
+                if (!this.sortOptions[0]) {
+                  this.updateSort()
+                }
+              } // end for artist for loop
+      
+              console.log(response.data.results)
+              //console.log("enter:")
+              //console.log(this.artistAll)
+              // console.log("")
+              // console.log("____________________")
+              // console.log(this.artistDescription.length)
+      
+            }); 
+          },
+          
+          // toggles the tab of an artist to description
+          description(input) {
+            this.tabStates[input] = 0 // 0 represents "description" tab
+            this.renderKey++
+          },
+      
+          // toggles the tab of an artist to track
+          track(input) {
+            this.tabStates[input] = 1 // 1 represents "track" tab
+            this.renderKey++
+          },
+          
+          clickGenreButton(genre) {
+            index = this.genres.indexOf(genre)
+            if (this.genreClick[index] == true) {
+              this.genreClick[index] = false
+            }
+            else {
+              this.genreClick[index] = true
+              this.all = false
+            }
+            atLeastOneGenreSelected = false
+            for (let i = 0; i < this.genreClick.length; i++) {
+              if (this.genreClick[i] == true) {
+                atLeastOneGenreSelected = true
+              }
+            }
+            if (!atLeastOneGenreSelected) {
+              this.all = true
+            }
+      
+            this.updateArtists()
+            this.genreKey++
+          },
+          updateArtists() {
+            this.artistDescription = []
+            this.resultCount = 0
+      
+            if (this.all) {
+              this.artistDescription = [].concat(this.artistAll)
+
+              //no. of search results
+              this.resultCount = this.allResultCount
+            }
+            else {
+              this.artistDescription = this.artistAll.filter(artist => this.genreClick[this.genres.indexOf(artist[9])] )
+              this.resultCount = this.artistDescription.length
+            }
+            
+            //if original "recommended" order, then we don't need to update the sorting of the results
+            if (!this.sortOptions[0]) {
+              this.updateSort();
+            }
+          },
+          clickAll() {
+            this.all = true
+            for (let i = 0; i < this.genreClick.length; i++) {
+              this.genreClick[i] = false
+            }
+            this.updateArtists()
+            this.genreKey++
+          },
+
+          genreColorUpdate(genre) {
+            index = this.genres.indexOf(genre)
+            return this.genreClick[index]
+          },
+          getID() {
+            this.id++
+            //console.log("gotID")
+            return this.id
+          }
+        },
+        // mounted () {
+        //   axios
+        //     .get(this.search)
+        //     .then(response => (this.result = response))
+        // }
+      
+      }); </script>
+      
+  </body>
+</html>
